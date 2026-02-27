@@ -14,6 +14,7 @@ pub enum Register8Bit {
 impl TryFrom<R8> for Register8Bit {
     type Error = &'static str;
 
+    #[inline]
     fn try_from(value: R8) -> Result<Self, Self::Error> {
         match value {
             R8::B => Ok(Self::B),
@@ -65,6 +66,7 @@ impl Registers {
         }
     }
 
+    #[inline]
     pub fn get_register_8bit(&self, register: Register8Bit) -> u8 {
         match register {
             Register8Bit::A => self.a,
@@ -77,6 +79,7 @@ impl Registers {
         }
     }
 
+    #[inline]
     pub fn set_register_8bit(&mut self, register: Register8Bit, val: u8) {
         match register {
             Register8Bit::A => self.a = val,
@@ -89,26 +92,19 @@ impl Registers {
         }
     }
 
+    #[inline]
     pub fn get_register_16bit(&self, register: Register16Bit) -> u16 {
         match register {
             Register16Bit::AF => unimplemented!("Get register AF"),
-            Register16Bit::BC => {
-                (self.get_register_8bit(Register8Bit::B) as u16) << 8
-                    | (self.get_register_8bit(Register8Bit::C) as u16)
-            }
-            Register16Bit::DE => {
-                (self.get_register_8bit(Register8Bit::D) as u16) << 8
-                    | (self.get_register_8bit(Register8Bit::E) as u16)
-            }
-            Register16Bit::HL => {
-                (self.get_register_8bit(Register8Bit::H) as u16) << 8
-                    | (self.get_register_8bit(Register8Bit::L) as u16)
-            }
+            Register16Bit::BC => (self.b as u16) << 8 | (self.c as u16),
+            Register16Bit::DE => (self.d as u16) << 8 | (self.e as u16),
+            Register16Bit::HL => (self.h as u16) << 8 | (self.l as u16),
             Register16Bit::SP => self.sp,
             Register16Bit::PC => self.pc,
         }
     }
 
+    #[inline]
     pub fn set_register_16bit(&mut self, register: Register16Bit, val: u16) {
         let low = (val & 0x00FF) as u8;
         let high = (val >> 8) as u8;
@@ -116,16 +112,16 @@ impl Registers {
         match register {
             Register16Bit::AF => unimplemented!("Get register AF"),
             Register16Bit::BC => {
-                self.set_register_8bit(Register8Bit::B, high);
-                self.set_register_8bit(Register8Bit::C, low);
+                self.b = high;
+                self.c = low;
             }
             Register16Bit::DE => {
-                self.set_register_8bit(Register8Bit::D, high);
-                self.set_register_8bit(Register8Bit::E, low);
+                self.d = high;
+                self.e = low;
             }
             Register16Bit::HL => {
-                self.set_register_8bit(Register8Bit::H, high);
-                self.set_register_8bit(Register8Bit::L, low);
+                self.h = high;
+                self.l = low;
             }
             Register16Bit::SP => self.sp = val,
             Register16Bit::PC => self.pc = val,

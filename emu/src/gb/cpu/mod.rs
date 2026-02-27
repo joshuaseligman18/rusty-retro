@@ -5,7 +5,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     gb::cpu::{
-        instruction::{Instruction, R8},
+        instruction::Instruction,
         registers::{Register8Bit, Register16Bit, Registers},
     },
     ram::Ram,

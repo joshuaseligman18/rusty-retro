@@ -14,10 +14,12 @@ impl<RamWordSize: WordSize> Ram<RamWordSize> {
         }
     }
 
+    #[inline]
     pub fn read(&self, addr: usize) -> RamWordSize {
         self.arr[addr]
     }
 
+    #[inline]
     pub fn write(&mut self, addr: usize, data: RamWordSize) {
         self.arr[addr] = data;
     }

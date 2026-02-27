@@ -56,6 +56,7 @@ impl DecodedOpcode {
 }
 
 impl From<u8> for DecodedOpcode {
+    #[inline]
     fn from(value: u8) -> Self {
         Self {
             x: (value >> 6) & 0b11,
