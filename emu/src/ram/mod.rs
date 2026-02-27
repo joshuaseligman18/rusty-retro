@@ -1,4 +1,4 @@
-use num_traits::{sign::Unsigned, Bounded, PrimInt};
+use num_traits::{Bounded, PrimInt, sign::Unsigned};
 
 pub trait WordSize: Unsigned + Bounded + PrimInt {}
 impl WordSize for u8 {}
