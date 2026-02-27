@@ -5,11 +5,12 @@ pub struct Instruction {
     pub decoded: DecodedOpcode,
 }
 
-impl Instruction {
-    pub fn new(opcode: u8) -> Self {
+impl From<u8> for Instruction {
+    #[inline]
+    fn from(value: u8) -> Self {
         Self {
-            opcode,
-            decoded: DecodedOpcode::from(opcode),
+            opcode: value,
+            decoded: value.into(),
         }
     }
 }

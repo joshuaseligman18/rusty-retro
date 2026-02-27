@@ -26,7 +26,7 @@ impl LR35902 {
 
     pub fn step(&mut self) {
         let opcode = self.fetch_imm8();
-        let instruction = Instruction::new(opcode);
+        let instruction = Instruction::from(opcode);
         match instruction.decoded.x {
             0b00 => self.handle_block0(&instruction),
             0b01 => self.handle_block1(&instruction),
@@ -134,7 +134,7 @@ mod tests {
         let mut test_cpu = init_test_cpu();
 
         let opcode = 0b01000001;
-        let instruction = Instruction::new(opcode);
+        let instruction = Instruction::from(opcode);
 
         test_cpu.registers.set_register_8bit(Register8Bit::B, 0x42);
         test_cpu.registers.set_register_8bit(Register8Bit::C, 0x18);
@@ -149,7 +149,7 @@ mod tests {
         test_cpu.ram.borrow_mut().write(0x2112, 0x18);
 
         let opcode = 0b01000110;
-        let instruction = Instruction::new(opcode);
+        let instruction = Instruction::from(opcode);
 
         test_cpu.registers.set_register_8bit(Register8Bit::B, 0x42);
         test_cpu
@@ -166,7 +166,7 @@ mod tests {
         test_cpu.ram.borrow_mut().write(0x2112, 0x42);
 
         let opcode = 0b01110000;
-        let instruction = Instruction::new(opcode);
+        let instruction = Instruction::from(opcode);
 
         test_cpu.registers.set_register_8bit(Register8Bit::B, 0x18);
         test_cpu
@@ -184,7 +184,7 @@ mod tests {
         test_cpu.ram.borrow_mut().write(0x2112, 0x42);
 
         let opcode = 0b0111000;
-        let instruction = Instruction::new(opcode);
+        let instruction = Instruction::from(opcode);
         test_cpu.handle_block1(&instruction);
     }
 }
