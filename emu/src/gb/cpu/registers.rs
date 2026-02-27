@@ -1,3 +1,5 @@
+use crate::gb::cpu::instruction::R8;
+
 #[derive(Debug)]
 pub enum Register8Bit {
     A,
@@ -7,6 +9,23 @@ pub enum Register8Bit {
     E,
     H,
     L,
+}
+
+impl TryFrom<R8> for Register8Bit {
+    type Error = &'static str;
+
+    fn try_from(value: R8) -> Result<Self, Self::Error> {
+        match value {
+            R8::B => Ok(Self::B),
+            R8::C => Ok(Self::C),
+            R8::D => Ok(Self::D),
+            R8::E => Ok(Self::E),
+            R8::H => Ok(Self::H),
+            R8::L => Ok(Self::L),
+            R8::HLMem => Err("R8::HLMem cannot be converted into Register8Bit"),
+            R8::A => Ok(Self::A),
+        }
+    }
 }
 
 #[derive(Debug)]
