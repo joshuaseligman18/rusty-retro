@@ -1,4 +1,6 @@
-use crate::gb::cpu::instruction::R8;
+use bitflags::bitflags;
+
+use crate::gb::cpu::{alu::AluResultInfo, instruction::R8};
 
 #[derive(Debug)]
 pub enum Register8Bit {
@@ -39,8 +41,19 @@ pub enum Register16Bit {
     PC,
 }
 
+bitflags! {
+    #[derive(Clone)]
+    pub struct FlagsRegister: u8 {
+        const Zero = 0b10000000;
+        const Subtraction = 0b01000000;
+        const HalfCarry = 0b00100000;
+        const Carry = 0b00010000;
+    }
+}
+
 pub struct Registers {
     a: u8,
+    f: FlagsRegister,
     b: u8,
     c: u8,
     d: u8,
@@ -55,6 +68,7 @@ impl Registers {
     pub fn new() -> Self {
         Self {
             a: 0x00,
+            f: FlagsRegister::empty(),
             b: 0x00,
             c: 0x00,
             d: 0x00,
@@ -64,6 +78,11 @@ impl Registers {
             sp: 0x0000,
             pc: 0x0000,
         }
+    }
+
+    #[inline]
+    pub fn get_flags(&self) -> FlagsRegister {
+        self.f.clone()
     }
 
     #[inline]
@@ -95,7 +114,7 @@ impl Registers {
     #[inline]
     pub fn get_register_16bit(&self, register: Register16Bit) -> u16 {
         match register {
-            Register16Bit::AF => unimplemented!("Get register AF"),
+            Register16Bit::AF => (self.a as u16) << 8 | ((self.f.bits() & 0xF0) as u16),
             Register16Bit::BC => (self.b as u16) << 8 | (self.c as u16),
             Register16Bit::DE => (self.d as u16) << 8 | (self.e as u16),
             Register16Bit::HL => (self.h as u16) << 8 | (self.l as u16),
@@ -110,7 +129,7 @@ impl Registers {
         let high = (val >> 8) as u8;
 
         match register {
-            Register16Bit::AF => unimplemented!("Get register AF"),
+            Register16Bit::AF => unreachable!("Get register AF"),
             Register16Bit::BC => {
                 self.b = high;
                 self.c = low;
@@ -126,6 +145,10 @@ impl Registers {
             Register16Bit::SP => self.sp = val,
             Register16Bit::PC => self.pc = val,
         }
+    }
+
+    pub fn set_flags_from_alu_res_info(&mut self, res_info: &AluResultInfo) {
+        self.f = FlagsRegister::from_bits_retain(res_info.bits());
     }
 }
 

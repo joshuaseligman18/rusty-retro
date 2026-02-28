@@ -1,3 +1,4 @@
+mod alu;
 mod instruction;
 mod registers;
 
@@ -5,8 +6,9 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     gb::cpu::{
+        alu::{add_with_carry, bitwise_and, bitwise_or, bitwise_xor, subtract_with_carry},
         instruction::Instruction,
-        registers::{Register8Bit, Register16Bit, Registers},
+        registers::{FlagsRegister, Register8Bit, Register16Bit, Registers},
     },
     ram::Ram,
 };
@@ -84,6 +86,35 @@ impl LR35902 {
 
     fn handle_block2(&mut self, instruction: &Instruction) {
         assert_eq!(instruction.decoded.x, 0b10);
+
+        let a: u8 = self.registers.get_register_8bit(Register8Bit::A);
+        let f: FlagsRegister = self.registers.get_flags();
+
+        let src: u8 = match Register8Bit::try_from(instruction.decoded.r8_z()) {
+            Ok(reg) => self.registers.get_register_8bit(reg),
+            Err(_) => self
+                .ram
+                .borrow()
+                .read(self.registers.get_register_16bit(Register16Bit::HL) as usize),
+        };
+
+        let alu_res = match instruction.decoded.y {
+            0b000 => add_with_carry(a, src, false),
+            0b001 => add_with_carry(a, src, f.contains(FlagsRegister::Carry)),
+            0b010 => subtract_with_carry(a, src, false),
+            0b011 => subtract_with_carry(a, src, f.contains(FlagsRegister::Carry)),
+            0b100 => bitwise_and(a, src),
+            0b101 => bitwise_xor(a, src),
+            0b110 => bitwise_or(a, src),
+            0b111 => subtract_with_carry(a, src, false),
+            _ => unreachable!(),
+        };
+
+        if instruction.decoded.y != 0b111 {
+            self.registers
+                .set_register_8bit(Register8Bit::A, alu_res.res);
+        }
+        self.registers.set_flags_from_alu_res_info(&alu_res.info);
     }
 
     fn handle_block3(&mut self, instruction: &Instruction) {
@@ -93,7 +124,7 @@ impl LR35902 {
 
 #[cfg(test)]
 mod tests {
-    use crate::gb::cpu::registers::Register16Bit;
+    use crate::gb::cpu::{alu::AluResultInfo, registers::Register16Bit};
 
     use super::*;
 
@@ -186,5 +217,143 @@ mod tests {
         let opcode = 0b0111000;
         let instruction = Instruction::from(opcode);
         test_cpu.handle_block1(&instruction);
+    }
+
+    #[test]
+    fn test_handle_block2_reg() {
+        let mut test_cpu = init_test_cpu();
+
+        let opcode = 0b10000000;
+        let instruction = Instruction::from(opcode);
+
+        test_cpu.registers.set_register_8bit(Register8Bit::A, 0x18);
+        test_cpu.registers.set_register_8bit(Register8Bit::B, 0x0D);
+
+        test_cpu.handle_block2(&instruction);
+        assert_eq!(test_cpu.registers.get_register_8bit(Register8Bit::A), 0x25);
+        assert!(!test_cpu.registers.get_flags().contains(FlagsRegister::Zero));
+        assert!(
+            !test_cpu
+                .registers
+                .get_flags()
+                .contains(FlagsRegister::Carry)
+        );
+        assert!(
+            test_cpu
+                .registers
+                .get_flags()
+                .contains(FlagsRegister::HalfCarry)
+        );
+        assert!(
+            !test_cpu
+                .registers
+                .get_flags()
+                .contains(FlagsRegister::Subtraction)
+        );
+    }
+
+    #[test]
+    fn test_handle_block2_carry_flag() {
+        let mut test_cpu = init_test_cpu();
+
+        let opcode = 0b10001000;
+        let instruction = Instruction::from(opcode);
+
+        test_cpu.registers.set_register_8bit(Register8Bit::A, 0x18);
+        test_cpu.registers.set_register_8bit(Register8Bit::B, 0x0D);
+        test_cpu
+            .registers
+            .set_flags_from_alu_res_info(&AluResultInfo::Carry);
+
+        test_cpu.handle_block2(&instruction);
+        assert_eq!(test_cpu.registers.get_register_8bit(Register8Bit::A), 0x26);
+        assert!(!test_cpu.registers.get_flags().contains(FlagsRegister::Zero));
+        assert!(
+            !test_cpu
+                .registers
+                .get_flags()
+                .contains(FlagsRegister::Carry)
+        );
+        assert!(
+            test_cpu
+                .registers
+                .get_flags()
+                .contains(FlagsRegister::HalfCarry)
+        );
+        assert!(
+            !test_cpu
+                .registers
+                .get_flags()
+                .contains(FlagsRegister::Subtraction)
+        );
+    }
+
+    #[test]
+    fn test_handle_block2_mem() {
+        let mut test_cpu = init_test_cpu();
+        test_cpu.ram.borrow_mut().write(0x2112, 0x0D);
+
+        let opcode = 0b10000110;
+        let instruction = Instruction::from(opcode);
+
+        test_cpu.registers.set_register_8bit(Register8Bit::A, 0x18);
+        test_cpu
+            .registers
+            .set_register_16bit(Register16Bit::HL, 0x2112);
+
+        test_cpu.handle_block2(&instruction);
+        assert_eq!(test_cpu.registers.get_register_8bit(Register8Bit::A), 0x25);
+        assert!(!test_cpu.registers.get_flags().contains(FlagsRegister::Zero));
+        assert!(
+            !test_cpu
+                .registers
+                .get_flags()
+                .contains(FlagsRegister::Carry)
+        );
+        assert!(
+            test_cpu
+                .registers
+                .get_flags()
+                .contains(FlagsRegister::HalfCarry)
+        );
+        assert!(
+            !test_cpu
+                .registers
+                .get_flags()
+                .contains(FlagsRegister::Subtraction)
+        );
+    }
+
+    #[test]
+    fn test_handle_block2_cp() {
+        let mut test_cpu = init_test_cpu();
+
+        let opcode = 0b10111000;
+        let instruction = Instruction::from(opcode);
+
+        test_cpu.registers.set_register_8bit(Register8Bit::A, 0x18);
+        test_cpu.registers.set_register_8bit(Register8Bit::B, 0x0D);
+
+        test_cpu.handle_block2(&instruction);
+        assert_eq!(test_cpu.registers.get_register_8bit(Register8Bit::A), 0x18);
+        assert!(!test_cpu.registers.get_flags().contains(FlagsRegister::Zero));
+        assert!(
+            !test_cpu
+                .registers
+                .get_flags()
+                .contains(FlagsRegister::Carry)
+        );
+        assert!(
+            test_cpu
+                .registers
+                .get_flags()
+                .contains(FlagsRegister::HalfCarry)
+        );
+        assert!(
+            test_cpu
+                .registers
+                .get_flags()
+                .contains(FlagsRegister::Subtraction)
+        );
     }
 }
