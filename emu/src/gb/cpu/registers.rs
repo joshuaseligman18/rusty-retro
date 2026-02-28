@@ -1,6 +1,9 @@
 use bitflags::bitflags;
 
-use crate::gb::cpu::{alu::AluResultInfo, instruction::{R8, R16, R16Mem}};
+use crate::gb::cpu::{
+    alu::AluResultInfo,
+    instruction::{R8, R16, R16Mem},
+};
 
 #[derive(Debug, Clone)]
 pub enum Register8Bit {
@@ -59,7 +62,7 @@ impl From<R16Mem> for Register16Bit {
         match value {
             R16Mem::BC => Self::BC,
             R16Mem::DE => Self::DE,
-            R16Mem::HLInc | R16Mem::HLDec  => Self::HL,
+            R16Mem::HLInc | R16Mem::HLDec => Self::HL,
         }
     }
 }
@@ -172,7 +175,8 @@ impl Registers {
 
     pub fn set_flags_from_alu_res_info(&mut self, res_info: &AluResultInfo, mask: FlagsRegister) {
         self.f.remove(mask.clone());
-        self.f.insert(FlagsRegister::from_bits_truncate(res_info.bits()) & mask);
+        self.f
+            .insert(FlagsRegister::from_bits_truncate(res_info.bits()) & mask);
     }
 }
 
@@ -213,7 +217,10 @@ mod tests {
         res_info.set(AluResultInfo::HalfCarry, false);
         res_info.set(AluResultInfo::Zero, false);
         res_info.set(AluResultInfo::Subtraction, false);
-        registers.set_flags_from_alu_res_info(&res_info, FlagsRegister::Subtraction | FlagsRegister::Carry | FlagsRegister::HalfCarry);
+        registers.set_flags_from_alu_res_info(
+            &res_info,
+            FlagsRegister::Subtraction | FlagsRegister::Carry | FlagsRegister::HalfCarry,
+        );
 
         assert!(registers.f.contains(FlagsRegister::Zero));
         assert!(registers.f.contains(FlagsRegister::Carry));

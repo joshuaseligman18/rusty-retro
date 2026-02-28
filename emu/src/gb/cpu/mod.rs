@@ -6,7 +6,11 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     gb::cpu::{
-        alu::{AluResultInfo, add_with_carry, bitwise_and, bitwise_or, bitwise_xor, rotate_left, rotate_left_through_carry, rotate_right, rotate_right_through_carry, subtract_with_carry},
+        alu::{
+            AluResultInfo, add_with_carry, bitwise_and, bitwise_or, bitwise_xor, rotate_left,
+            rotate_left_through_carry, rotate_right, rotate_right_through_carry,
+            subtract_with_carry,
+        },
         instruction::{Instruction, R16Mem},
         registers::{FlagsRegister, Register8Bit, Register16Bit, Registers},
     },
@@ -45,7 +49,9 @@ impl LR35902 {
             .read(self.registers.get_register_16bit(Register16Bit::PC) as usize);
         self.registers.set_register_16bit(
             Register16Bit::PC,
-            self.registers.get_register_16bit(Register16Bit::PC).wrapping_add(1),
+            self.registers
+                .get_register_16bit(Register16Bit::PC)
+                .wrapping_add(1),
         );
         data
     }
@@ -59,15 +65,19 @@ impl LR35902 {
     fn handle_block0(&mut self, instruction: &Instruction) {
         assert_eq!(instruction.decoded.x, 0b00);
 
-        match (instruction.decoded.p(), instruction.decoded.q(), instruction.decoded.z) {
+        match (
+            instruction.decoded.p(),
+            instruction.decoded.q(),
+            instruction.decoded.z,
+        ) {
             // nop
-            (_, 0b0, 0b000) => {},
+            (_, 0b0, 0b000) => {}
             // ld r16, imm16
             (_, 0b0, 0b001) => {
                 let imm = self.fetch_imm16();
                 let dest: Register16Bit = instruction.decoded.r16_p().into();
                 self.registers.set_register_16bit(dest, imm);
-            },
+            }
             // ld [r16mem], a
             (_, 0b0, 0b010) => {
                 let dest_reg: R16Mem = instruction.decoded.r16mem_p();
@@ -76,11 +86,15 @@ impl LR35902 {
                 self.ram.borrow_mut().write(dest_addr as usize, a);
 
                 match dest_reg {
-                    R16Mem::HLInc => self.registers.set_register_16bit(Register16Bit::HL, dest_addr.wrapping_add(1)),
-                    R16Mem::HLDec => self.registers.set_register_16bit(Register16Bit::HL, dest_addr.wrapping_sub(1)),
-                    _ => {},
+                    R16Mem::HLInc => self
+                        .registers
+                        .set_register_16bit(Register16Bit::HL, dest_addr.wrapping_add(1)),
+                    R16Mem::HLDec => self
+                        .registers
+                        .set_register_16bit(Register16Bit::HL, dest_addr.wrapping_sub(1)),
+                    _ => {}
                 }
-            },
+            }
             // ld a, [r16mem]
             (_, 0b1, 0b010) => {
                 let src_reg: R16Mem = instruction.decoded.r16mem_p();
@@ -89,38 +103,65 @@ impl LR35902 {
                 self.registers.set_register_8bit(Register8Bit::A, src_data);
 
                 match src_reg {
-                    R16Mem::HLInc => self.registers.set_register_16bit(Register16Bit::HL, src_addr.wrapping_add(1)),
-                    R16Mem::HLDec => self.registers.set_register_16bit(Register16Bit::HL, src_addr.wrapping_sub(1)),
-                    _ => {},
+                    R16Mem::HLInc => self
+                        .registers
+                        .set_register_16bit(Register16Bit::HL, src_addr.wrapping_add(1)),
+                    R16Mem::HLDec => self
+                        .registers
+                        .set_register_16bit(Register16Bit::HL, src_addr.wrapping_sub(1)),
+                    _ => {}
                 }
-            },
+            }
             // ld [imm16], sp
             (0b00, 0b1, 0b000) => {
                 let dest_addr = self.fetch_imm16();
                 let sp = self.registers.get_register_16bit(Register16Bit::SP);
-                self.ram.borrow_mut().write(dest_addr as usize, (sp & 0xFF) as u8);
-                self.ram.borrow_mut().write(dest_addr.wrapping_add(1) as usize, (sp >> 8) as u8);
-            },
+                self.ram
+                    .borrow_mut()
+                    .write(dest_addr as usize, (sp & 0xFF) as u8);
+                self.ram
+                    .borrow_mut()
+                    .write(dest_addr.wrapping_add(1) as usize, (sp >> 8) as u8);
+            }
             // inc r16
             (_, 0b0, 0b011) => {
-                let cur_reg_val = self.registers.get_register_16bit(instruction.decoded.r16_p().into());
-                self.registers.set_register_16bit(instruction.decoded.r16_p().into(), cur_reg_val.wrapping_add(1));
-            },
+                let cur_reg_val = self
+                    .registers
+                    .get_register_16bit(instruction.decoded.r16_p().into());
+                self.registers.set_register_16bit(
+                    instruction.decoded.r16_p().into(),
+                    cur_reg_val.wrapping_add(1),
+                );
+            }
             // dec r16
             (_, 0b1, 0b011) => {
-                let cur_reg_val = self.registers.get_register_16bit(instruction.decoded.r16_p().into());
-                self.registers.set_register_16bit(instruction.decoded.r16_p().into(), cur_reg_val.wrapping_sub(1));
-            },
+                let cur_reg_val = self
+                    .registers
+                    .get_register_16bit(instruction.decoded.r16_p().into());
+                self.registers.set_register_16bit(
+                    instruction.decoded.r16_p().into(),
+                    cur_reg_val.wrapping_sub(1),
+                );
+            }
             // add hl, r16
             (_, 0b1, 0b001) => {
                 let hl = self.registers.get_register_16bit(Register16Bit::HL);
-                let add_reg_val = self.registers.get_register_16bit(instruction.decoded.r16_p().into());
+                let add_reg_val = self
+                    .registers
+                    .get_register_16bit(instruction.decoded.r16_p().into());
                 let lower = add_with_carry((hl & 0xFF) as u8, (add_reg_val & 0xFF) as u8, false);
-                let upper = add_with_carry((hl >> 8) as u8, (add_reg_val >> 8) as u8, lower.info.contains(AluResultInfo::Carry));
+                let upper = add_with_carry(
+                    (hl >> 8) as u8,
+                    (add_reg_val >> 8) as u8,
+                    lower.info.contains(AluResultInfo::Carry),
+                );
                 let new_hl = ((upper.res as u16) << 8) | (lower.res as u16);
                 self.registers.set_register_16bit(Register16Bit::HL, new_hl);
-                self.registers.set_flags_from_alu_res_info(&upper.info, FlagsRegister::Carry | FlagsRegister::HalfCarry | FlagsRegister::Subtraction);
-            },
+                self.registers.set_flags_from_alu_res_info(
+                    &upper.info,
+                    FlagsRegister::Carry | FlagsRegister::HalfCarry | FlagsRegister::Subtraction,
+                );
+            }
             // inc r8
             (_, _, 0b100) => {
                 let reg_or_mem = Register8Bit::try_from(instruction.decoded.r8_y());
@@ -136,13 +177,16 @@ impl LR35902 {
 
                 match reg_or_mem {
                     Ok(reg) => self.registers.set_register_8bit(reg, inc_val.res),
-                    Err(_) => self
-                        .ram
-                        .borrow_mut()
-                        .write(self.registers.get_register_16bit(Register16Bit::HL) as usize, inc_val.res),
+                    Err(_) => self.ram.borrow_mut().write(
+                        self.registers.get_register_16bit(Register16Bit::HL) as usize,
+                        inc_val.res,
+                    ),
                 };
-                self.registers.set_flags_from_alu_res_info(&inc_val.info, FlagsRegister::Zero | FlagsRegister::Subtraction | FlagsRegister::HalfCarry);
-            },
+                self.registers.set_flags_from_alu_res_info(
+                    &inc_val.info,
+                    FlagsRegister::Zero | FlagsRegister::Subtraction | FlagsRegister::HalfCarry,
+                );
+            }
             // dec r8
             (_, _, 0b101) => {
                 let reg_or_mem = Register8Bit::try_from(instruction.decoded.r8_y());
@@ -158,49 +202,62 @@ impl LR35902 {
 
                 match reg_or_mem {
                     Ok(reg) => self.registers.set_register_8bit(reg, dec_val.res),
-                    Err(_) => self
-                        .ram
-                        .borrow_mut()
-                        .write(self.registers.get_register_16bit(Register16Bit::HL) as usize, dec_val.res),
+                    Err(_) => self.ram.borrow_mut().write(
+                        self.registers.get_register_16bit(Register16Bit::HL) as usize,
+                        dec_val.res,
+                    ),
                 };
-                self.registers.set_flags_from_alu_res_info(&dec_val.info, FlagsRegister::Zero | FlagsRegister::Subtraction | FlagsRegister::HalfCarry);
-            },
+                self.registers.set_flags_from_alu_res_info(
+                    &dec_val.info,
+                    FlagsRegister::Zero | FlagsRegister::Subtraction | FlagsRegister::HalfCarry,
+                );
+            }
             // ld r8, imm8
             (_, _, 0b110) => {
                 let src = self.fetch_imm8();
                 match Register8Bit::try_from(instruction.decoded.r8_y()) {
                     Ok(reg) => self.registers.set_register_8bit(reg, src),
-                    Err(_) => self
-                        .ram
-                        .borrow_mut()
-                        .write(self.registers.get_register_16bit(Register16Bit::HL) as usize, src),
+                    Err(_) => self.ram.borrow_mut().write(
+                        self.registers.get_register_16bit(Register16Bit::HL) as usize,
+                        src,
+                    ),
                 };
-            },
+            }
             // rlca
             (0b00, 0b0, 0b111) => {
                 let res = rotate_left(self.registers.get_register_8bit(Register8Bit::A));
                 self.registers.set_register_8bit(Register8Bit::A, res.res);
-                self.registers.set_flags_from_alu_res_info(&res.info, FlagsRegister::all());
-            },
+                self.registers
+                    .set_flags_from_alu_res_info(&res.info, FlagsRegister::all());
+            }
             // rrca
             (0b00, 0b1, 0b111) => {
                 let res = rotate_right(self.registers.get_register_8bit(Register8Bit::A));
                 self.registers.set_register_8bit(Register8Bit::A, res.res);
-                self.registers.set_flags_from_alu_res_info(&res.info, FlagsRegister::all());
-            },
+                self.registers
+                    .set_flags_from_alu_res_info(&res.info, FlagsRegister::all());
+            }
             // rla
             (0b01, 0b0, 0b111) => {
-                let res = rotate_left_through_carry(self.registers.get_register_8bit(Register8Bit::A), self.registers.get_flags().contains(FlagsRegister::Carry));
+                let res = rotate_left_through_carry(
+                    self.registers.get_register_8bit(Register8Bit::A),
+                    self.registers.get_flags().contains(FlagsRegister::Carry),
+                );
                 self.registers.set_register_8bit(Register8Bit::A, res.res);
-                self.registers.set_flags_from_alu_res_info(&res.info, FlagsRegister::all());
-            },
+                self.registers
+                    .set_flags_from_alu_res_info(&res.info, FlagsRegister::all());
+            }
             // rra
             (0b01, 0b1, 0b111) => {
-                let res = rotate_right_through_carry(self.registers.get_register_8bit(Register8Bit::A), self.registers.get_flags().contains(FlagsRegister::Carry));
+                let res = rotate_right_through_carry(
+                    self.registers.get_register_8bit(Register8Bit::A),
+                    self.registers.get_flags().contains(FlagsRegister::Carry),
+                );
                 self.registers.set_register_8bit(Register8Bit::A, res.res);
-                self.registers.set_flags_from_alu_res_info(&res.info, FlagsRegister::all());
-            },
-            (_, _, _) => unimplemented!()
+                self.registers
+                    .set_flags_from_alu_res_info(&res.info, FlagsRegister::all());
+            }
+            (_, _, _) => unimplemented!(),
         }
     }
 
@@ -268,7 +325,8 @@ impl LR35902 {
             self.registers
                 .set_register_8bit(Register8Bit::A, alu_res.res);
         }
-        self.registers.set_flags_from_alu_res_info(&alu_res.info, FlagsRegister::all());
+        self.registers
+            .set_flags_from_alu_res_info(&alu_res.info, FlagsRegister::all());
     }
 
     fn handle_block3(&mut self, instruction: &Instruction) {
