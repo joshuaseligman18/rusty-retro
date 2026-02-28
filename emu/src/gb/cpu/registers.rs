@@ -1,8 +1,8 @@
 use bitflags::bitflags;
 
-use crate::gb::cpu::{alu::AluResultInfo, instruction::R8};
+use crate::gb::cpu::{alu::AluResultInfo, instruction::{R8, R16, R16Mem}};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Register8Bit {
     A,
     B,
@@ -31,7 +31,7 @@ impl TryFrom<R8> for Register8Bit {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Register16Bit {
     AF,
     BC,
@@ -39,6 +39,29 @@ pub enum Register16Bit {
     HL,
     SP,
     PC,
+}
+
+impl From<R16> for Register16Bit {
+    #[inline]
+    fn from(value: R16) -> Self {
+        match value {
+            R16::BC => Self::BC,
+            R16::DE => Self::DE,
+            R16::HL => Self::HL,
+            R16::SP => Self::SP,
+        }
+    }
+}
+
+impl From<R16Mem> for Register16Bit {
+    #[inline]
+    fn from(value: R16Mem) -> Self {
+        match value {
+            R16Mem::BC => Self::BC,
+            R16Mem::DE => Self::DE,
+            R16Mem::HLInc | R16Mem::HLDec  => Self::HL,
+        }
+    }
 }
 
 bitflags! {
@@ -147,8 +170,9 @@ impl Registers {
         }
     }
 
-    pub fn set_flags_from_alu_res_info(&mut self, res_info: &AluResultInfo) {
-        self.f = FlagsRegister::from_bits_retain(res_info.bits());
+    pub fn set_flags_from_alu_res_info(&mut self, res_info: &AluResultInfo, mask: FlagsRegister) {
+        self.f.remove(mask.clone());
+        self.f.insert(FlagsRegister::from_bits_truncate(res_info.bits()) & mask);
     }
 }
 
@@ -176,5 +200,24 @@ mod tests {
         assert_eq!(registers.get_register_16bit(Register16Bit::BC), 0x1218);
         assert_eq!(registers.get_register_8bit(Register8Bit::B), 0x12);
         assert_eq!(registers.get_register_8bit(Register8Bit::C), 0x18);
+    }
+
+    #[test]
+    fn test_set_flags_from_alu_res_info() {
+        let mut registers = Registers::new();
+        registers.f.set(FlagsRegister::Zero, true);
+        registers.f.set(FlagsRegister::Subtraction, true);
+
+        let mut res_info = AluResultInfo::empty();
+        res_info.set(AluResultInfo::Carry, true);
+        res_info.set(AluResultInfo::HalfCarry, false);
+        res_info.set(AluResultInfo::Zero, false);
+        res_info.set(AluResultInfo::Subtraction, false);
+        registers.set_flags_from_alu_res_info(&res_info, FlagsRegister::Subtraction | FlagsRegister::Carry | FlagsRegister::HalfCarry);
+
+        assert!(registers.f.contains(FlagsRegister::Zero));
+        assert!(registers.f.contains(FlagsRegister::Carry));
+        assert!(!registers.f.contains(FlagsRegister::HalfCarry));
+        assert!(!registers.f.contains(FlagsRegister::Subtraction));
     }
 }

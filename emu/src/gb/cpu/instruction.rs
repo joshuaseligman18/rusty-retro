@@ -15,7 +15,7 @@ impl From<u8> for Instruction {
     }
 }
 
-#[derive(Debug, TryFromPrimitive)]
+#[derive(Debug, TryFromPrimitive, Clone)]
 #[repr(u8)]
 pub enum R8 {
     B = 0b000,
@@ -26,6 +26,24 @@ pub enum R8 {
     L = 0b101,
     HLMem = 0b110,
     A = 0b111,
+}
+
+#[derive(Debug, TryFromPrimitive, Clone)]
+#[repr(u8)]
+pub enum R16 {
+    BC = 0b00,
+    DE = 0b01,
+    HL = 0b10,
+    SP = 0b11,
+}
+
+#[derive(Debug, TryFromPrimitive, Clone)]
+#[repr(u8)]
+pub enum R16Mem {
+    BC = 0b00,
+    DE = 0b01,
+    HLInc = 0b10,
+    HLDec = 0b11,
 }
 
 pub struct DecodedOpcode {
@@ -53,6 +71,16 @@ impl DecodedOpcode {
     #[inline]
     pub fn r8_z(&self) -> R8 {
         R8::try_from(self.z).unwrap()
+    }
+
+    #[inline]
+    pub fn r16_p(&self) -> R16 {
+        R16::try_from(self.p()).unwrap()
+    }
+
+    #[inline]
+    pub fn r16mem_p(&self) -> R16Mem {
+        R16Mem::try_from(self.p()).unwrap()
     }
 }
 

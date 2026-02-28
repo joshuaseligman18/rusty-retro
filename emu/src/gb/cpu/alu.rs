@@ -82,6 +82,34 @@ pub fn bitwise_or(num1: u8, num2: u8) -> AluResult {
     AluResult { res, info }
 }
 
+pub fn rotate_left(num: u8) -> AluResult {
+    let res = num.rotate_left(1);
+    let mut info = AluResultInfo::empty();
+    info.set(AluResultInfo::Carry, (num >> 7) & 0b1 == 1);
+    AluResult { res, info }
+}
+
+pub fn rotate_right(num: u8) -> AluResult {
+    let res = num.rotate_right(1);
+    let mut info = AluResultInfo::empty();
+    info.set(AluResultInfo::Carry, (num & 0b1) == 1);
+    AluResult { res, info }
+}
+
+pub fn rotate_left_through_carry(num: u8, carry: bool) -> AluResult {
+    let res = (num << 1) | (carry as u8);
+    let mut info = AluResultInfo::empty();
+    info.set(AluResultInfo::Carry, (num >> 7) & 0b1 == 1);
+    AluResult { res, info }
+}
+
+pub fn rotate_right_through_carry(num: u8, carry: bool) -> AluResult {
+    let res = (num >> 1) | ((carry as u8) << 7);
+    let mut info = AluResultInfo::empty();
+    info.set(AluResultInfo::Carry, (num & 0b1) == 1);
+    AluResult { res, info }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -318,6 +346,62 @@ mod tests {
         assert_eq!(out.res, 0x00);
         assert!(!out.info.contains(AluResultInfo::Carry));
         assert!(out.info.contains(AluResultInfo::Zero));
+        assert!(!out.info.contains(AluResultInfo::HalfCarry));
+        assert!(!out.info.contains(AluResultInfo::Subtraction));
+    }
+
+    #[test]
+    fn test_rotate_left() {
+        // 10110010
+        // --------
+        // 01100101 with carry = 1
+
+        let out: AluResult = rotate_left(0b10110010);
+        assert_eq!(out.res, 0b01100101);
+        assert!(out.info.contains(AluResultInfo::Carry));
+        assert!(!out.info.contains(AluResultInfo::Zero));
+        assert!(!out.info.contains(AluResultInfo::HalfCarry));
+        assert!(!out.info.contains(AluResultInfo::Subtraction));
+    }
+
+    #[test]
+    fn test_rotate_right() {
+        // 10110010
+        // --------
+        // 01011001 with carry = 0
+
+        let out: AluResult = rotate_right(0b10110010);
+        assert_eq!(out.res, 0b01011001);
+        assert!(!out.info.contains(AluResultInfo::Carry));
+        assert!(!out.info.contains(AluResultInfo::Zero));
+        assert!(!out.info.contains(AluResultInfo::HalfCarry));
+        assert!(!out.info.contains(AluResultInfo::Subtraction));
+    }
+
+    #[test]
+    fn test_rotate_left_through_carry() {
+        // 00110010 C = 1
+        // --------
+        // 01100101 with carry = 0
+
+        let out: AluResult = rotate_left_through_carry(0b00110010, true);
+        assert_eq!(out.res, 0b01100101);
+        assert!(!out.info.contains(AluResultInfo::Carry));
+        assert!(!out.info.contains(AluResultInfo::Zero));
+        assert!(!out.info.contains(AluResultInfo::HalfCarry));
+        assert!(!out.info.contains(AluResultInfo::Subtraction));
+    }
+
+    #[test]
+    fn test_rotate_right_through_carry() {
+        // 10110010 C = 1
+        // --------
+        // 11011001 with carry = 0
+
+        let out: AluResult = rotate_right_through_carry(0b10110010, true);
+        assert_eq!(out.res, 0b11011001);
+        assert!(!out.info.contains(AluResultInfo::Carry));
+        assert!(!out.info.contains(AluResultInfo::Zero));
         assert!(!out.info.contains(AluResultInfo::HalfCarry));
         assert!(!out.info.contains(AluResultInfo::Subtraction));
     }
