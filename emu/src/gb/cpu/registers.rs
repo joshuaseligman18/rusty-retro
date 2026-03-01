@@ -2,7 +2,7 @@ use bitflags::bitflags;
 
 use crate::gb::cpu::{
     alu::AluResultInfo,
-    instruction::{R8, R16, R16Mem},
+    instruction::{R8, R16, R16Mem, R16Stk},
 };
 
 #[derive(Debug, Clone)]
@@ -63,6 +63,18 @@ impl From<R16Mem> for Register16Bit {
             R16Mem::BC => Self::BC,
             R16Mem::DE => Self::DE,
             R16Mem::HLInc | R16Mem::HLDec => Self::HL,
+        }
+    }
+}
+
+impl From<R16Stk> for Register16Bit {
+    #[inline]
+    fn from(value: R16Stk) -> Self {
+        match value {
+            R16Stk::BC => Self::BC,
+            R16Stk::DE => Self::DE,
+            R16Stk::HL => Self::HL,
+            R16Stk::AF => Self::AF,
         }
     }
 }
@@ -155,7 +167,10 @@ impl Registers {
         let high = (val >> 8) as u8;
 
         match register {
-            Register16Bit::AF => unreachable!("Get register AF"),
+            Register16Bit::AF => {
+                self.a = high;
+                self.f = FlagsRegister::from_bits_truncate(low & 0xF0);
+            }
             Register16Bit::BC => {
                 self.b = high;
                 self.c = low;

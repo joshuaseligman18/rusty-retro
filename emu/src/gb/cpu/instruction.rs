@@ -48,6 +48,15 @@ pub enum R16Mem {
 
 #[derive(Debug, TryFromPrimitive, Clone)]
 #[repr(u8)]
+pub enum R16Stk {
+    BC = 0b00,
+    DE = 0b01,
+    HL = 0b10,
+    AF = 0b11,
+}
+
+#[derive(Debug, TryFromPrimitive, Clone)]
+#[repr(u8)]
 pub enum Cond {
     NZ = 0b00,
     Z = 0b01,
@@ -93,8 +102,18 @@ impl DecodedOpcode {
     }
 
     #[inline]
+    pub fn r16stk_p(&self) -> R16Stk {
+        R16Stk::try_from(self.p()).unwrap()
+    }
+
+    #[inline]
     pub fn cond(&self) -> Cond {
         Cond::try_from(self.y & 0b011).unwrap()
+    }
+
+    #[inline]
+    pub fn tgt3_y(&self) -> u8 {
+        self.y * 8
     }
 }
 

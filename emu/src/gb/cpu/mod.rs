@@ -22,6 +22,7 @@ use crate::{
 pub struct LR35902 {
     ram: Rc<RefCell<Ram<u8>>>,
     registers: registers::Registers,
+    ime: bool,
 }
 
 impl LR35902 {
@@ -29,6 +30,7 @@ impl LR35902 {
         Self {
             ram: sys_ram,
             registers: Registers::new(),
+            ime: false,
         }
     }
 
@@ -432,6 +434,172 @@ impl LR35902 {
 
     fn handle_block3(&mut self, instruction: &Instruction) {
         assert_eq!(instruction.decoded.x, 0b11);
+
+        match (
+            instruction.decoded.p(),
+            instruction.decoded.q(),
+            instruction.decoded.z,
+        ) {
+            (_, _, 0b110) => {
+                let a: u8 = self.registers.get_register_8bit(Register8Bit::A);
+                let f: FlagsRegister = self.registers.get_flags();
+
+                let src = self.fetch_imm8();
+
+                let alu_res = match instruction.decoded.y {
+                    // add imm8
+                    0b000 => add_with_carry(a, src, false),
+                    // adc imm8
+                    0b001 => add_with_carry(a, src, f.contains(FlagsRegister::Carry)),
+                    // sub imm8
+                    0b010 => subtract_with_carry(a, src, false),
+                    // sbc imm8
+                    0b011 => subtract_with_carry(a, src, f.contains(FlagsRegister::Carry)),
+                    // and imm8
+                    0b100 => bitwise_and(a, src),
+                    // xor imm8
+                    0b101 => bitwise_xor(a, src),
+                    // or imm8
+                    0b110 => bitwise_or(a, src),
+                    // cp imm8
+                    0b111 => subtract_with_carry(a, src, false),
+                    _ => unreachable!(),
+                };
+
+                if instruction.decoded.y != 0b111 {
+                    self.registers
+                        .set_register_8bit(Register8Bit::A, alu_res.res);
+                }
+                self.registers
+                    .set_flags_from_alu_res_info(&alu_res.info, FlagsRegister::all());
+            }
+            // ret cond
+            (0b00 | 0b01, _, 0b000) => {
+                let f = self.registers.get_flags();
+                let should_ret = match instruction.decoded.cond() {
+                    Cond::Z => f.contains(FlagsRegister::Zero),
+                    Cond::NZ => !f.contains(FlagsRegister::Zero),
+                    Cond::C => f.contains(FlagsRegister::Carry),
+                    Cond::NC => !f.contains(FlagsRegister::Carry),
+                };
+
+                if should_ret {
+                    let new_pc = self.pop();
+                    self.registers.set_register_16bit(Register16Bit::PC, new_pc);
+                }
+            }
+            // ret
+            (0b00, 0b1, 0b001) => {
+                let new_pc = self.pop();
+                self.registers.set_register_16bit(Register16Bit::PC, new_pc);
+            }
+            // reti
+            (0b01, 0b1, 0b001) => {
+                self.ime = true;
+                let new_pc = self.pop();
+                self.registers.set_register_16bit(Register16Bit::PC, new_pc);
+            }
+            // jp cond, imm16
+            (0b00 | 0b01, _, 0b010) => {
+                let new_addr = self.fetch_imm16();
+
+                let f = self.registers.get_flags();
+                let should_jump = match instruction.decoded.cond() {
+                    Cond::Z => f.contains(FlagsRegister::Zero),
+                    Cond::NZ => !f.contains(FlagsRegister::Zero),
+                    Cond::C => f.contains(FlagsRegister::Carry),
+                    Cond::NC => !f.contains(FlagsRegister::Carry),
+                };
+
+                if should_jump {
+                    self.registers
+                        .set_register_16bit(Register16Bit::PC, new_addr);
+                }
+            }
+            // jp imm16
+            (0b00, 0b0, 0b011) => {
+                let new_addr = self.fetch_imm16();
+                self.registers
+                    .set_register_16bit(Register16Bit::PC, new_addr);
+            }
+            // jp hl
+            (0b10, 0b1, 0b001) => {
+                let new_addr = self.registers.get_register_16bit(Register16Bit::HL);
+                self.registers
+                    .set_register_16bit(Register16Bit::PC, new_addr);
+            }
+            // call cond, imm16
+            (0b00 | 0b01, _, 0b100) => {
+                let new_addr = self.fetch_imm16();
+
+                let f = self.registers.get_flags();
+                let should_jump = match instruction.decoded.cond() {
+                    Cond::Z => f.contains(FlagsRegister::Zero),
+                    Cond::NZ => !f.contains(FlagsRegister::Zero),
+                    Cond::C => f.contains(FlagsRegister::Carry),
+                    Cond::NC => !f.contains(FlagsRegister::Carry),
+                };
+
+                if should_jump {
+                    self.push(self.registers.get_register_16bit(Register16Bit::PC));
+                    self.registers
+                        .set_register_16bit(Register16Bit::PC, new_addr);
+                }
+            }
+            // call imm16
+            (0b00, 0b1, 0b101) => {
+                let new_addr = self.fetch_imm16();
+
+                self.push(self.registers.get_register_16bit(Register16Bit::PC));
+                self.registers
+                    .set_register_16bit(Register16Bit::PC, new_addr);
+            }
+            // rst tgt3
+            (_, _, 0b111) => {
+                let new_addr = instruction.decoded.tgt3_y() as u16;
+                self.push(self.registers.get_register_16bit(Register16Bit::PC));
+                self.registers
+                    .set_register_16bit(Register16Bit::PC, new_addr);
+            }
+            // pop r16stk
+            (_, 0b0, 0b001) => {
+                let pop_val = self.pop();
+                self.registers
+                    .set_register_16bit(instruction.decoded.r16stk_p().into(), pop_val);
+            }
+            // push r16stk
+            (_, 0b0, 0b101) => {
+                let push_val = self
+                    .registers
+                    .get_register_16bit(instruction.decoded.r16stk_p().into());
+                self.push(push_val);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn pop(&mut self) -> u16 {
+        let mut sp = self.registers.get_register_16bit(Register16Bit::SP);
+        let pop_low = self.ram.borrow().read(sp as usize);
+        sp = sp.wrapping_add(1);
+        let pop_high = self.ram.borrow().read(sp as usize);
+        sp = sp.wrapping_add(1);
+        self.registers.set_register_16bit(Register16Bit::SP, sp);
+
+        ((pop_high as u16) << 8) | (pop_low as u16)
+    }
+
+    fn push(&mut self, push_val: u16) {
+        let push_val_high = ((push_val >> 8) & 0xFF) as u8;
+        let push_val_low = (push_val & 0xFF) as u8;
+
+        let mut sp = self.registers.get_register_16bit(Register16Bit::SP);
+        sp = sp.wrapping_sub(1);
+        self.ram.borrow_mut().write(sp as usize, push_val_high);
+        sp = sp.wrapping_sub(1);
+        self.ram.borrow_mut().write(sp as usize, push_val_low);
+
+        self.registers.set_register_16bit(Register16Bit::SP, sp);
     }
 }
 
