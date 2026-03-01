@@ -178,6 +178,12 @@ impl Registers {
         self.f
             .insert(FlagsRegister::from_bits_truncate(res_info.bits()) & mask);
     }
+
+    pub fn set_flags(&mut self, new_flags: &FlagsRegister, mask: FlagsRegister) {
+        self.f.remove(mask.clone());
+        self.f
+            .insert(FlagsRegister::from_bits_truncate(new_flags.bits()) & mask);
+    }
 }
 
 impl Default for Registers {
@@ -219,6 +225,28 @@ mod tests {
         res_info.set(AluResultInfo::Subtraction, false);
         registers.set_flags_from_alu_res_info(
             &res_info,
+            FlagsRegister::Subtraction | FlagsRegister::Carry | FlagsRegister::HalfCarry,
+        );
+
+        assert!(registers.f.contains(FlagsRegister::Zero));
+        assert!(registers.f.contains(FlagsRegister::Carry));
+        assert!(!registers.f.contains(FlagsRegister::HalfCarry));
+        assert!(!registers.f.contains(FlagsRegister::Subtraction));
+    }
+
+    #[test]
+    fn test_set_flags() {
+        let mut registers = Registers::new();
+        registers.f.set(FlagsRegister::Zero, true);
+        registers.f.set(FlagsRegister::Subtraction, true);
+
+        let mut new_flags = FlagsRegister::empty();
+        new_flags.set(FlagsRegister::Carry, true);
+        new_flags.set(FlagsRegister::HalfCarry, false);
+        new_flags.set(FlagsRegister::Zero, false);
+        new_flags.set(FlagsRegister::Subtraction, false);
+        registers.set_flags(
+            &new_flags,
             FlagsRegister::Subtraction | FlagsRegister::Carry | FlagsRegister::HalfCarry,
         );
 

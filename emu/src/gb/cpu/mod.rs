@@ -4,14 +4,16 @@ mod registers;
 
 use std::{cell::RefCell, rc::Rc};
 
+use bitflags::Flags;
+
 use crate::{
     gb::cpu::{
         alu::{
-            AluResultInfo, add_with_carry, bitwise_and, bitwise_or, bitwise_xor, rotate_left,
-            rotate_left_through_carry, rotate_right, rotate_right_through_carry,
+            AluResultInfo, add_with_carry, bitwise_and, bitwise_not, bitwise_or, bitwise_xor,
+            rotate_left, rotate_left_through_carry, rotate_right, rotate_right_through_carry,
             subtract_with_carry,
         },
-        instruction::{Instruction, R16Mem},
+        instruction::{Cond, Instruction, R16Mem},
         registers::{FlagsRegister, Register8Bit, Register16Bit, Registers},
     },
     ram::Ram,
@@ -71,7 +73,7 @@ impl LR35902 {
             instruction.decoded.z,
         ) {
             // nop
-            (_, 0b0, 0b000) => {}
+            (0b00, 0b0, 0b000) => {}
             // ld r16, imm16
             (_, 0b0, 0b001) => {
                 let imm = self.fetch_imm16();
@@ -257,7 +259,106 @@ impl LR35902 {
                 self.registers
                     .set_flags_from_alu_res_info(&res.info, FlagsRegister::all());
             }
-            (_, _, _) => unimplemented!(),
+            // daa
+            (0b10, 0b0, 0b111) => {
+                let a = self.registers.get_register_8bit(Register8Bit::A);
+                let f = self.registers.get_flags();
+
+                let mut final_info = AluResultInfo::empty();
+                let mut mask = FlagsRegister::HalfCarry | FlagsRegister::Zero;
+
+                if f.contains(FlagsRegister::Subtraction) {
+                    let mut adjustment: u8 = 0;
+                    if f.contains(FlagsRegister::HalfCarry) {
+                        adjustment += 0x6;
+                    }
+                    if f.contains(FlagsRegister::Carry) {
+                        adjustment += 0x60;
+                    }
+                    self.registers
+                        .set_register_8bit(Register8Bit::A, a.wrapping_sub(adjustment));
+                } else {
+                    let mut adjustment: u8 = 0;
+                    if f.contains(FlagsRegister::HalfCarry) || (a & 0xF) > 0x9 {
+                        adjustment += 0x6;
+                    }
+                    if f.contains(FlagsRegister::Carry) || a > 0x99 {
+                        adjustment += 0x60;
+                        final_info.set(AluResultInfo::Carry, true);
+                        mask |= FlagsRegister::Carry;
+                    }
+                    self.registers
+                        .set_register_8bit(Register8Bit::A, a.wrapping_add(adjustment));
+                }
+                final_info.set(
+                    AluResultInfo::Zero,
+                    self.registers.get_register_8bit(Register8Bit::A) == 0,
+                );
+                self.registers
+                    .set_flags_from_alu_res_info(&final_info, mask);
+            }
+            // cpl
+            (0b10, 0b1, 0b111) => {
+                let res = bitwise_not(self.registers.get_register_8bit(Register8Bit::A));
+                self.registers.set_register_8bit(Register8Bit::A, res.res);
+                self.registers.set_flags_from_alu_res_info(
+                    &res.info,
+                    FlagsRegister::Subtraction | FlagsRegister::HalfCarry,
+                );
+            }
+            // scf
+            (0b11, 0b0, 0b111) => {
+                self.registers.set_flags(
+                    &FlagsRegister::Carry,
+                    FlagsRegister::Carry | FlagsRegister::Subtraction | FlagsRegister::HalfCarry,
+                );
+            }
+            // ccf
+            (0b11, 0b1, 0b111) => {
+                let mut new_flags = FlagsRegister::empty();
+                new_flags.set(
+                    FlagsRegister::Carry,
+                    !self.registers.get_flags().contains(FlagsRegister::Carry),
+                );
+                self.registers.set_flags(
+                    &new_flags,
+                    FlagsRegister::Carry | FlagsRegister::Subtraction | FlagsRegister::HalfCarry,
+                );
+            }
+            // jr imm8
+            (0b01, 0b1, 0b000) => {
+                let offset = self.fetch_imm8();
+                self.registers.set_register_16bit(
+                    Register16Bit::PC,
+                    self.registers
+                        .get_register_16bit(Register16Bit::PC)
+                        .wrapping_add(offset as i16 as u16),
+                );
+            }
+            // jr cond, imm8
+            (0b10 | 0b11, _, 0b000) => {
+                let offset = self.fetch_imm8();
+
+                let f = self.registers.get_flags();
+                let should_jump = match instruction.decoded.cond() {
+                    Cond::Z => f.contains(FlagsRegister::Zero),
+                    Cond::NZ => !f.contains(FlagsRegister::Zero),
+                    Cond::C => f.contains(FlagsRegister::Carry),
+                    Cond::NC => !f.contains(FlagsRegister::Carry),
+                };
+
+                if should_jump {
+                    self.registers.set_register_16bit(
+                        Register16Bit::PC,
+                        self.registers
+                            .get_register_16bit(Register16Bit::PC)
+                            .wrapping_add(offset as i16 as u16),
+                    );
+                }
+            }
+            // stop
+            (0b01, 0b0, 0b000) => unimplemented!("stop"),
+            (_, _, _) => unreachable!(),
         }
     }
 

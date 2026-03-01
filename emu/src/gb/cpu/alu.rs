@@ -110,6 +110,12 @@ pub fn rotate_right_through_carry(num: u8, carry: bool) -> AluResult {
     AluResult { res, info }
 }
 
+pub fn bitwise_not(num: u8) -> AluResult {
+    let res = !num;
+    let info = AluResultInfo::Subtraction | AluResultInfo::HalfCarry;
+    AluResult { res, info }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -404,5 +410,19 @@ mod tests {
         assert!(!out.info.contains(AluResultInfo::Zero));
         assert!(!out.info.contains(AluResultInfo::HalfCarry));
         assert!(!out.info.contains(AluResultInfo::Subtraction));
+    }
+
+    #[test]
+    fn test_bitwise_not() {
+        // 10101010
+        // --------
+        // 01010101
+
+        let out: AluResult = bitwise_not(0b10101010);
+        assert_eq!(out.res, 0b01010101);
+        assert!(!out.info.contains(AluResultInfo::Carry));
+        assert!(!out.info.contains(AluResultInfo::Zero));
+        assert!(out.info.contains(AluResultInfo::HalfCarry));
+        assert!(out.info.contains(AluResultInfo::Subtraction));
     }
 }

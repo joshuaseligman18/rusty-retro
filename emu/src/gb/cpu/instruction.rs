@@ -46,6 +46,15 @@ pub enum R16Mem {
     HLDec = 0b11,
 }
 
+#[derive(Debug, TryFromPrimitive, Clone)]
+#[repr(u8)]
+pub enum Cond {
+    NZ = 0b00,
+    Z = 0b01,
+    NC = 0b10,
+    C = 0b11,
+}
+
 pub struct DecodedOpcode {
     pub x: u8,
     pub y: u8,
@@ -81,6 +90,11 @@ impl DecodedOpcode {
     #[inline]
     pub fn r16mem_p(&self) -> R16Mem {
         R16Mem::try_from(self.p()).unwrap()
+    }
+
+    #[inline]
+    pub fn cond(&self) -> Cond {
+        Cond::try_from(self.y & 0b011).unwrap()
     }
 }
 
